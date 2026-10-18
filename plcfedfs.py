@@ -83,7 +83,7 @@ def mixture_fit(z, y, classes, contexts, ledger, rng, steps):
 
 def context_assignments(x, y, classes, args, ledger, rng):
     if args.variant == "client_only":
-        return np.ones((len(x), 1)), np.zeros(len(x), dtype=int)
+        return np.ones((len(x), 1)), np.zeros(len(x), dtype=int), 0.
     n = len(x); folds = np.arange(n) % args.folds
     projection = rng.normal(size=(x.shape[1], args.projection)) / np.sqrt(x.shape[1])
     assignments = []
@@ -111,10 +111,11 @@ def context_assignments(x, y, classes, args, ledger, rng):
     count = released[:args.contexts].clip(0); reliability = released[args.contexts:].clip(0)
     valid = count >= args.minimum_context
     if valid.sum() < 2 or reliability.sum() / max(count.sum(), 1) < args.reliability:
-        return np.ones((n, 1)), q.argmax(-1)
+        return np.ones((n, 1)), q.argmax(-1), 0.
     q[:, ~valid] = 0; q = q / q.sum(1, keepdims=True).clip(1e-12)
     empty = q.sum(1) == 0; q[empty] = 1 / args.contexts
-    return q, q.argmax(-1)
+    uncertainty = 1 - np.clip(reliability.sum() / max(count.sum(), 1), 0, 1)
+    return q, q.argmax(-1), float(uncertainty)
 
 
 def screen(x, y, classes, args, ledger, rng):
@@ -125,7 +126,7 @@ def screen(x, y, classes, args, ledger, rng):
 
 
 def client_summary(x, y, classes, candidates, args, ledger, rng):
-    q, inferred = context_assignments(x, y, classes, args, ledger, rng)
+    q, inferred, assignment_uncertainty = context_assignments(x, y, classes, args, ledger, rng)
     x = x[:, candidates]; p = x.shape[1]
     one_hot = np.eye(classes)[y]
     per_record = np.concatenate([x[:, :, None] * one_hot[:, None], np.broadcast_to(one_hot[:, None], (len(x), p, classes)), x[:, :, None], np.ones((len(x), p, 1)), x[:, :, None] ** 2], -1)
@@ -140,7 +141,7 @@ def client_summary(x, y, classes, candidates, args, ledger, rng):
     best_class = np.abs(correlations).argmax(-1)
     relevance = np.take_along_axis(correlations, best_class[..., None], -1).squeeze(-1).clip(-1, 1)
     sampling = np.maximum(ex2 - ex ** 2, .01) / mass
-    assignment = np.maximum(0, 1 - q.max(1).mean()) / mass
+    assignment = assignment_uncertainty / mass
     privacy = (sigma / mass) ** 2 * (1 + relevance ** 2)
     weights = 1 / (sampling + assignment + privacy + 1e-6)
     weights /= weights.sum(0, keepdims=True).clip(1e-12)

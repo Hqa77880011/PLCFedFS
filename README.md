@@ -88,3 +88,7 @@ The script reports Friedman statistics, exact signed-rank sign-enumeration compa
 ## Implementation choices
 
 The selector uses conservative fixed Gaussian release allocation rather than adaptive budget allocation. Discovery uses a compact random-projection/residual/confidence/gradient signature and a bounded number of noisy sufficient-statistic updates. Relevance uncertainty is a first-order variance proxy, not a separate exact confidence theorem for clipped noisy ratios. Redundancy sketches are second-moment matrices over the private candidate union and use public feature scaling. The explicit release ledger, degeneration rule and variance decomposition remain part of the selection mechanism.
+
+## Reproduction logic conventions
+
+Assignment uncertainty used in released feature summaries is computed from the already-accounted noisy context-reliability release. No unnoised mean of per-record context confidences is exported through the uncertainty score. Context-recovery metrics and downstream classifier evaluation are separate evaluator-only outputs, not additional private releases.
